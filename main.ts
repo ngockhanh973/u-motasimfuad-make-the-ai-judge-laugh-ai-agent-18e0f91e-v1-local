@@ -1,40 +1,31 @@
-// Entry runner for the AI Agent Confessions bounty.
-//
-// The confession itself lives in entry.txt next to this file. This script
-// does nothing clever: it copies that one line, byte for byte, into the
-// folder the grader points at, so what the judge reads is exactly what
-// was written here. Deterministic on purpose — two runs, same bytes.
+// v2 runner: carries the one-line confession from entry.txt to the
+// grader's output folder, byte for byte. The line itself is the whole
+// entry, so this file stays deliberately boring — read, check, copy.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, "entry.txt");
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const sourcePath = join(scriptDir, "entry.txt");
 
-// The grader sets MAKEFUN_OUTPUT_DIR; without it, land in out/ beside
-// this script so a local run still has somewhere visible to check.
-const targetDir = process.env.MAKEFUN_OUTPUT_DIR
-  ? resolve(process.env.MAKEFUN_OUTPUT_DIR)
-  : join(here, "out");
-
-function loadConfession(): string {
-  const text = readFileSync(source, "utf8");
-  // One guard for the whole gate: 1–200 characters, not blank, one line.
-  // Refuse early and loudly instead of shipping a line the scorer
-  // would throw out.
-  const ok =
-    text.length >= 1 &&
-    text.length <= 200 &&
-    text.trim().length > 0 &&
-    !text.includes("\n");
-  if (!ok) {
-    throw new Error(
-      `confession must be one line of 1-200 characters, got ${text.length}`,
-    );
-  }
-  return text;
+function fail(message: string): never {
+  throw new Error(`entry.txt rejected: ${message}`);
 }
 
-const confession = loadConfession();
-mkdirSync(targetDir, { recursive: true });
-writeFileSync(join(targetDir, "entry.txt"), confession, "utf8");
+const line = readFileSync(sourcePath, "utf8");
+
+// Mirror the sealed gate here so a bad line fails loudly in dev instead
+// of scoring a silent zero: exactly one line, 1-200 chars, not blank.
+if (line.length === 0) fail("empty file");
+if (line.length > 200) fail(`too long (${line.length} chars, max 200)`);
+if (line.trim().length === 0) fail("only whitespace");
+if (line.includes("\n") || line.includes("\r")) {
+  fail("must be a single line");
+}
+
+const outDir = process.env.MAKEFUN_OUTPUT_DIR
+  ? resolve(process.env.MAKEFUN_OUTPUT_DIR)
+  : join(scriptDir, "out");
+mkdirSync(outDir, { recursive: true });
+writeFileSync(join(outDir, "entry.txt"), line, "utf8");
+console.log(`wrote ${line.length}-char confession to ${join(outDir, "entry.txt")}`);
